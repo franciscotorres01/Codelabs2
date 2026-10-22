@@ -2,8 +2,8 @@ package com.denkitronik.clienteservice2.cliente.services;
 
 import com.denkitronik.clienteservice2.cliente.entities.Cliente;
 import com.denkitronik.clienteservice2.cliente.entities.Region;
-import com.denkitronik.clienteservice2.cliente.exceptions.ClienteExistsException;
 import com.denkitronik.clienteservice2.cliente.exceptions.ClienteNotFoundException;
+import com.denkitronik.clienteservice2.cliente.exceptions.ClienteServiceException;
 import com.denkitronik.clienteservice2.cliente.repositories.IClienteDao;
 import com.denkitronik.clienteservice2.cliente.repositories.IRegionDao;
 import org.junit.jupiter.api.BeforeEach;
@@ -22,160 +22,196 @@ import org.springframework.data.domain.Pageable;
 import java.util.List;
 import java.util.Optional;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.assertj.core.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-@DisplayName("ClienteServiceImpl - Unit tests")
+@DisplayName("Unit tests — ClienteServiceImpl con Mockito")
 class ClienteServiceImplTest {
 
     @Mock
-    private IClienteDao clienteDao;
+    private IClienteDao clienteDao;      // mock: no toca la BD
 
     @Mock
-    private IRegionDao regionDao;
+    private IRegionDao regionDao;        // mock: no toca la BD
 
     @InjectMocks
-    private ClienteServiceImpl clienteService;
+    private ClienteServiceImpl clienteService;   // instancia real con los mocks inyectados
 
     private Cliente cliente;
     private Region region;
 
     @BeforeEach
     void setUp() {
+        // Arrange compartido: datos de prueba reutilizados en todos los tests
         region = new Region();
         region.setId(1L);
-        region.setNombre("Sudamerica");
+        region.setNombre("Sudamérica");
 
         cliente = new Cliente();
         cliente.setId(1L);
-        cliente.setNombre("Ana");
-        cliente.setApellido("Torres");
-        cliente.setEmail("ana@mail.com");
+        cliente.setNombre("Linus");
+        cliente.setApellido("Torvalds");
+        cliente.setEmail("linus@kernel.org");
         cliente.setRegion(region);
-    }
-
-    // ---------- findById ----------
-
-    @Test
-    @DisplayName("findById: existe -> devuelve el cliente")
-    void findById_existente_retornaCliente() {
-        when(clienteDao.findById(1L)).thenReturn(Optional.of(cliente));
-
-        Cliente resultado = clienteService.findById(1L);
-
-        assertThat(resultado).isNotNull();
-        assertThat(resultado.getId()).isEqualTo(1L);
-        assertThat(resultado.getEmail()).isEqualTo("ana@mail.com");
-        verify(clienteDao).findById(1L);
-    }
-
-    @Test
-    @DisplayName("findById: no existe -> lanza ClienteNotFoundException")
-    void findById_noExiste_lanzaNotFound() {
-        when(clienteDao.findById(99L)).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> clienteService.findById(99L))
-                .isInstanceOf(ClienteNotFoundException.class);
     }
 
     // ---------- findAll ----------
 
     @Test
-    @DisplayName("findAll: devuelve la pagina del DAO")
-    void findAll_retornaPagina() {
+    @DisplayName("findAll — con clientes → devuelve la página")
+    void findAll_conClientes_debeRetornarPagina() {
+        // Arrange
         Pageable pageable = PageRequest.of(0, 5);
         Page<Cliente> pagina = new PageImpl<>(List.of(cliente), pageable, 1);
         when(clienteDao.findAll(pageable)).thenReturn(pagina);
 
+        // Act
         Page<Cliente> resultado = clienteService.findAll(pageable);
 
+        // Assert
         assertThat(resultado.getContent()).hasSize(1);
         assertThat(resultado.getTotalElements()).isEqualTo(1);
-        verify(clienteDao).findAll(pageable);
+        verify(clienteDao, times(1)).findAll(pageable);
+    }
+
+    @Test
+    @DisplayName("findAll — sin clientes → devuelve página vacía")
+    void findAll_sinClientes_debeRetornarPaginaVacia() {
+        // Arrange
+        Pageable pageable = PageRequest.of(0, 5);
+        when(clienteDao.findAll(pageable)).thenReturn(new PageImpl<>(List.of(), pageable, 0));
+
+        // Act
+        Page<Cliente> resultado = clienteService.findAll(pageable);
+
+        // Assert
+        assertThat(resultado.getContent()).isEmpty();
+        assertThat(resultado.getTotalElements()).isZero();
+    }
+
+    // ---------- findById ----------
+
+    @Test
+    @DisplayName("findById — ID existente → devuelve el cliente")
+    void findById_idExistente_debeRetornarCliente() {
+        // Arrange
+        when(clienteDao.findById(1L)).thenReturn(Optional.of(cliente));
+
+        // Act
+        Cliente resultado = clienteService.findById(1L);
+
+        // Assert
+        assertThat(resultado.getId()).isEqualTo(1L);
+        assertThat(resultado.getNombre()).isEqualTo("Linus");
+        verify(clienteDao, times(1)).findById(1L);
+    }
+
+    @Test
+    @DisplayName("findById — ID inexistente → lanza ClienteNotFoundException")
+    void findById_idInexistente_debeLanzarExcepcion() {
+        // Arrange
+        when(clienteDao.findById(999L)).thenReturn(Optional.empty());
+
+        // Act + Assert
+        assertThatThrownBy(() -> clienteService.findById(999L))
+                .isInstanceOf(ClienteNotFoundException.class)
+                .hasMessageContaining("999");
     }
 
     // ---------- save ----------
 
     @Test
-    @DisplayName("save: guarda y devuelve el cliente")
-    void save_guardaYRetornaCliente() {
+    @DisplayName("save — cliente válido → devuelve el cliente guardado")
+    void save_clienteValido_debeRetornarClienteGuardado() {
+        // Arrange
         when(clienteDao.save(cliente)).thenReturn(cliente);
 
+        // Act
         Cliente resultado = clienteService.save(cliente);
 
+        // Assert
         assertThat(resultado).isSameAs(cliente);
-        verify(clienteDao).save(cliente);
+        verify(clienteDao, times(1)).save(cliente);
     }
 
     @Test
-    @DisplayName("save: email duplicado -> lanza ClienteExistsException")
-    void save_emailDuplicado_lanzaClienteExists() {
-        when(clienteDao.save(any(Cliente.class)))
-                .thenThrow(new DataIntegrityViolationException("duplicate key"));
+    @DisplayName("save — email duplicado → lanza ClienteServiceException")
+    void save_emailDuplicado_debeLanzarClienteServiceException() {
+        // Arrange: simulamos que la BD rechaza por email duplicado
+        when(clienteDao.save(cliente))
+                .thenThrow(new DataIntegrityViolationException("duplicate key value"));
 
+        // Act + Assert
         assertThatThrownBy(() -> clienteService.save(cliente))
-                .isInstanceOf(ClienteExistsException.class)
-                .hasMessageContaining("ana@mail.com");
+                .isInstanceOf(ClienteServiceException.class)
+                .hasMessageContaining("duplicados");
     }
 
     // ---------- delete ----------
 
     @Test
-    @DisplayName("delete: existe -> elimina el cliente")
-    void delete_existente_eliminaCliente() {
-        when(clienteDao.findById(1L)).thenReturn(Optional.of(cliente));
+    @DisplayName("delete — ID existente → elimina el cliente")
+    void delete_idExistente_debeEliminarCliente() {
+        // Arrange
+        when(clienteDao.existsById(1L)).thenReturn(true);
 
+        // Act
         clienteService.delete(1L);
 
-        verify(clienteDao).delete(cliente);
+        // Assert
+        verify(clienteDao, times(1)).deleteById(1L);
     }
 
     @Test
-    @DisplayName("delete: no existe -> lanza NotFound y nunca borra")
-    void delete_noExiste_lanzaNotFoundYNoBorra() {
-        when(clienteDao.findById(99L)).thenReturn(Optional.empty());
+    @DisplayName("delete — ID inexistente → lanza excepción sin llamar deleteById")
+    void delete_idInexistente_noDebeEliminar() {
+        // Arrange
+        when(clienteDao.existsById(999L)).thenReturn(false);
 
-        assertThatThrownBy(() -> clienteService.delete(99L))
+        // Act + Assert
+        assertThatThrownBy(() -> clienteService.delete(999L))
                 .isInstanceOf(ClienteNotFoundException.class);
 
-        verify(clienteDao, never()).delete(any(Cliente.class));
+        // Verificación de comportamiento: deleteById NUNCA debe llamarse
+        verify(clienteDao, never()).deleteById(any());
     }
 
     // ---------- update ----------
 
     @Test
-    @DisplayName("update: existe -> fusiona los campos y guarda")
-    void update_existente_fusionaCampos() {
-        Cliente datos = new Cliente();
-        datos.setNombre("Lina");
-        datos.setApellido("Updated");
-        datos.setEmail("lina@mail.com");
-        datos.setRegion(region);
+    @DisplayName("update — ID existente → actualiza y retorna cliente modificado")
+    void update_idExistente_debeActualizarYRetornar() {
+        // Arrange
+        Cliente datosNuevos = new Cliente();
+        datosNuevos.setNombre("Linus Updated");
+        datosNuevos.setApellido("Torvalds");
+        datosNuevos.setEmail("linus2@kernel.org");
+        datosNuevos.setRegion(region);
 
         when(clienteDao.findById(1L)).thenReturn(Optional.of(cliente));
         when(clienteDao.save(any(Cliente.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        Cliente resultado = clienteService.update(1L, datos);
+        // Act
+        Cliente resultado = clienteService.update(1L, datosNuevos);
 
-        assertThat(resultado.getId()).isEqualTo(1L);          // conserva el id original
-        assertThat(resultado.getNombre()).isEqualTo("Lina");
-        assertThat(resultado.getApellido()).isEqualTo("Updated");
-        assertThat(resultado.getEmail()).isEqualTo("lina@mail.com");
-        verify(clienteDao).save(cliente);
+        // Assert
+        assertThat(resultado.getNombre()).isEqualTo("Linus Updated");
+        assertThat(resultado.getEmail()).isEqualTo("linus2@kernel.org");
+        verify(clienteDao, times(1)).findById(1L);
+        verify(clienteDao, times(1)).save(any(Cliente.class));
     }
 
     @Test
-    @DisplayName("update: no existe -> lanza NotFound y nunca guarda")
-    void update_noExiste_lanzaNotFoundYNoGuarda() {
-        when(clienteDao.findById(99L)).thenReturn(Optional.empty());
+    @DisplayName("update — ID inexistente → lanza ClienteNotFoundException")
+    void update_idInexistente_debeLanzarExcepcion() {
+        // Arrange
+        when(clienteDao.findById(999L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> clienteService.update(99L, new Cliente()))
-                .isInstanceOf(ClienteNotFoundException.class);
+        // Act + Assert
+        assertThatThrownBy(() -> clienteService.update(999L, cliente))
+                .isInstanceOf(ClienteNotFoundException.class)
+                .hasMessageContaining("999");
 
         verify(clienteDao, never()).save(any(Cliente.class));
     }
@@ -183,13 +219,16 @@ class ClienteServiceImplTest {
     // ---------- findAllRegiones ----------
 
     @Test
-    @DisplayName("findAllRegiones: devuelve la lista del DAO")
-    void findAllRegiones_retornaLista() {
+    @DisplayName("findAllRegiones — devuelve la lista de regiones")
+    void findAllRegiones_debeRetornarLista() {
+        // Arrange
         when(regionDao.findAll()).thenReturn(List.of(region));
 
+        // Act
         List<Region> resultado = clienteService.findAllRegiones();
 
+        // Assert
         assertThat(resultado).hasSize(1);
-        assertThat(resultado.get(0).getNombre()).isEqualTo("Sudamerica");
+        assertThat(resultado.get(0).getNombre()).isEqualTo("Sudamérica");
     }
 }

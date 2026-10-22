@@ -2,8 +2,8 @@ package com.denkitronik.clienteservice2.cliente.services;
 
 import com.denkitronik.clienteservice2.cliente.entities.Cliente;
 import com.denkitronik.clienteservice2.cliente.entities.Region;
-import com.denkitronik.clienteservice2.cliente.exceptions.ClienteExistsException;
 import com.denkitronik.clienteservice2.cliente.exceptions.ClienteNotFoundException;
+import com.denkitronik.clienteservice2.cliente.exceptions.ClienteServiceException;
 import com.denkitronik.clienteservice2.cliente.repositories.IClienteDao;
 import com.denkitronik.clienteservice2.cliente.repositories.IRegionDao;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -57,8 +57,10 @@ public class ClienteServiceImpl implements IClienteService {
     @Override
     @Transactional
     public void delete(Long id) {
-        Cliente cliente = findById(id); // lanza 404 si no existe
-        clienteDao.delete(cliente);
+        if (!clienteDao.existsById(id)) {
+            throw new ClienteNotFoundException(id);
+        }
+        clienteDao.deleteById(id);
     }
 
     @Override
@@ -67,13 +69,13 @@ public class ClienteServiceImpl implements IClienteService {
         return regionDao.findAll();
     }
 
-    // Transforma el error de BD (email duplicado) en una excepción propia
+    // Transforma el error de la BD en una excepción propia del servicio
     private Cliente guardar(Cliente cliente) {
         try {
             return clienteDao.save(cliente);
         } catch (DataIntegrityViolationException e) {
-            throw new ClienteExistsException(
-                    "Ya existe un cliente con el email: " + cliente.getEmail());
+            throw new ClienteServiceException(
+                    "No se pudo guardar el cliente: email o datos duplicados");
         }
     }
 }
