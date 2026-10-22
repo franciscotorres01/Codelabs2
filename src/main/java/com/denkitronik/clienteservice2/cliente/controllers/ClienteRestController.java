@@ -51,7 +51,8 @@ public class ClienteRestController {
         actual.setEmail(cliente.getEmail());
         actual.setCreateAt(cliente.getCreateAt());
         actual.setRegion(cliente.getRegion());
-        return ResponseEntity.ok(clienteService.save(actual));
+        // La plataforma exige 201 Created al actualizar
+        return ResponseEntity.status(HttpStatus.CREATED).body(clienteService.save(actual));
     }
 
     @DeleteMapping("/{id}")
