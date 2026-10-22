@@ -79,6 +79,10 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ClienteServiceException.class)
     public ResponseEntity<ApiErrorResponse> handleService(ClienteServiceException ex, HttpServletRequest request) {
+        // Email o datos duplicados -> 409 Conflict (igual que ClienteExistsException)
+        if (ex.getMessage() != null && ex.getMessage().contains("duplicados")) {
+            return build(HttpStatus.CONFLICT, ex.getMessage(), request);
+        }
         return build(HttpStatus.INTERNAL_SERVER_ERROR, ex.getMessage(), request);
     }
 
