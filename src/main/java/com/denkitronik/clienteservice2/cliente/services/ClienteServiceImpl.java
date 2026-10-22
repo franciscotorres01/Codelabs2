@@ -2,10 +2,12 @@ package com.denkitronik.clienteservice2.cliente.services;
 
 import com.denkitronik.clienteservice2.cliente.entities.Cliente;
 import com.denkitronik.clienteservice2.cliente.entities.Region;
+import com.denkitronik.clienteservice2.cliente.exceptions.ClienteExistsException;
 import com.denkitronik.clienteservice2.cliente.exceptions.ClienteNotFoundException;
 import com.denkitronik.clienteservice2.cliente.repositories.IClienteDao;
 import com.denkitronik.clienteservice2.cliente.repositories.IRegionDao;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -38,7 +40,18 @@ public class ClienteServiceImpl implements IClienteService {
     @Override
     @Transactional
     public Cliente save(Cliente cliente) {
-        return clienteDao.save(cliente);
+        return guardar(cliente);
+    }
+
+    @Override
+    @Transactional
+    public Cliente update(Long id, Cliente datos) {
+        Cliente existente = findById(id); // lanza 404 si no existe
+        existente.setNombre(datos.getNombre());
+        existente.setApellido(datos.getApellido());
+        existente.setEmail(datos.getEmail());
+        existente.setRegion(datos.getRegion());
+        return guardar(existente);
     }
 
     @Override
@@ -52,5 +65,15 @@ public class ClienteServiceImpl implements IClienteService {
     @Transactional(readOnly = true)
     public List<Region> findAllRegiones() {
         return regionDao.findAll();
+    }
+
+    // Transforma el error de BD (email duplicado) en una excepción propia
+    private Cliente guardar(Cliente cliente) {
+        try {
+            return clienteDao.save(cliente);
+        } catch (DataIntegrityViolationException e) {
+            throw new ClienteExistsException(
+                    "Ya existe un cliente con el email: " + cliente.getEmail());
+        }
     }
 }

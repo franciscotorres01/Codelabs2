@@ -13,4 +13,5 @@ public interface IClienteService {
     Cliente save(Cliente cliente);
     void delete(Long id);
     List<Region> findAllRegiones();
+    Cliente update(Long id, Cliente datos);
 }

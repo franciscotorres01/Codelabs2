@@ -2,6 +2,7 @@ package com.denkitronik.clienteservice2.cliente.services;
 
 import com.denkitronik.clienteservice2.cliente.entities.Cliente;
 import com.denkitronik.clienteservice2.cliente.entities.Region;
+import com.denkitronik.clienteservice2.cliente.exceptions.ClienteExistsException;
 import com.denkitronik.clienteservice2.cliente.exceptions.ClienteNotFoundException;
 import com.denkitronik.clienteservice2.cliente.repositories.IClienteDao;
 import com.denkitronik.clienteservice2.cliente.repositories.IRegionDao;
@@ -12,6 +13,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -22,6 +24,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -109,6 +112,17 @@ class ClienteServiceImplTest {
         verify(clienteDao).save(cliente);
     }
 
+    @Test
+    @DisplayName("save: email duplicado -> lanza ClienteExistsException")
+    void save_emailDuplicado_lanzaClienteExists() {
+        when(clienteDao.save(any(Cliente.class)))
+                .thenThrow(new DataIntegrityViolationException("duplicate key"));
+
+        assertThatThrownBy(() -> clienteService.save(cliente))
+                .isInstanceOf(ClienteExistsException.class)
+                .hasMessageContaining("ana@mail.com");
+    }
+
     // ---------- delete ----------
 
     @Test
@@ -129,7 +143,41 @@ class ClienteServiceImplTest {
         assertThatThrownBy(() -> clienteService.delete(99L))
                 .isInstanceOf(ClienteNotFoundException.class);
 
-        verify(clienteDao, never()).delete(org.mockito.ArgumentMatchers.any(Cliente.class));
+        verify(clienteDao, never()).delete(any(Cliente.class));
+    }
+
+    // ---------- update ----------
+
+    @Test
+    @DisplayName("update: existe -> fusiona los campos y guarda")
+    void update_existente_fusionaCampos() {
+        Cliente datos = new Cliente();
+        datos.setNombre("Lina");
+        datos.setApellido("Updated");
+        datos.setEmail("lina@mail.com");
+        datos.setRegion(region);
+
+        when(clienteDao.findById(1L)).thenReturn(Optional.of(cliente));
+        when(clienteDao.save(any(Cliente.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        Cliente resultado = clienteService.update(1L, datos);
+
+        assertThat(resultado.getId()).isEqualTo(1L);          // conserva el id original
+        assertThat(resultado.getNombre()).isEqualTo("Lina");
+        assertThat(resultado.getApellido()).isEqualTo("Updated");
+        assertThat(resultado.getEmail()).isEqualTo("lina@mail.com");
+        verify(clienteDao).save(cliente);
+    }
+
+    @Test
+    @DisplayName("update: no existe -> lanza NotFound y nunca guarda")
+    void update_noExiste_lanzaNotFoundYNoGuarda() {
+        when(clienteDao.findById(99L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> clienteService.update(99L, new Cliente()))
+                .isInstanceOf(ClienteNotFoundException.class);
+
+        verify(clienteDao, never()).save(any(Cliente.class));
     }
 
     // ---------- findAllRegiones ----------
